@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Pruebas Three.js</title>
+</head>
+
+<body>
+    <script type="module">
+        import * as THREE from './JS/three.module.js';
+        import { OrbitControls } from './JS/OrbitControls.js';
+        import { GUI } from './JS/lil-gui.module.min.js';
+        import { VOXLoader, VOXMesh } from './JS/VOXLoader.js';
+        import { OBJLoader } from './JS/OBJLoader.js';
+        import { GLTFLoader } from './JS/GLTFLoader.js';
+
+        // Crear Escena/Definir Fondo
+        var Escena = new THREE.Scene();
+        var CTexturaFondo = new THREE.TextureLoader();
+        CTexturaFondo.crossOrigin = "Anonymous";
+        CTexturaFondo.load('./Recursos/Skybox.png', function (TexturaFondo) {
+            Escena.background = TexturaFondo;
+        });
+
+        // Crear camara
+        var Camara = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight);
+        Camara.position.set(0, -100, 0);
+
+        // Crear Render
+        var Render = new THREE.WebGLRenderer();
+        Render.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(Render.domElement);
+        Render.setPixelRatio(window.devicePixelRatio);
+        Render.shadowMap.enabled = true;
+
+        // Controles Camara
+        var controles = new OrbitControls(Camara, Render.domElement);
+
+        // Crear Luz
+        const luz = new THREE.AmbientLight(0xffffff);
+        luz.position.x = 0;
+        luz.position.y = 0;
+        luz.position.z = 0;
+        Escena.add(luz);
+
+        // Añade Musica
+        var camino = './Recursos/Ijbiñij.mp3';
+        const listener = new THREE.AudioListener();
+        Camara.add(listener);
+        const musica = new THREE.PositionalAudio(listener);
+        const audioLoader = new THREE.AudioLoader();
+        audioLoader.load(camino, function (buffer) {
+            musica.position.set(0, 300, 0);
+            musica.setBuffer(buffer);
+            musica.setLoop(true);
+            musica.setVolume(.8);
+            musica.setRefDistance(100);
+            musica.setMaxDistance(100);
+        });
+        // Codigo de la esfera auxiliar
+        const geometriaEsfera = new THREE.SphereGeometry(300, 32, 32);
+        const materialEsfera = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const auxiliar = new THREE.Mesh(geometriaEsfera, materialEsfera);
+        auxiliar.position.set(0, 300, 0);
+        //Escena.add(auxiliar);
+
+        // Botones
+        const gui = new GUI();
+        const audioControls = {
+            play: function () {
+                musica.play();
+            },
+            pause: function () {
+                musica.pause();
+            }
+        };
+        gui.add(audioControls, 'play');
+        gui.add(audioControls, 'pause');
+
+        // Codigo Police Boox
+        const loaderPB = new VOXLoader();
+        loaderPB.load('./Recursos/PoliceBox.vox', (chunks) => {
+            chunks.forEach((chunk) => {
+                if (chunk.data) {
+                    const mesh = new VOXMesh(chunk);
+                    mesh.scale.set(0.5, 0.5, 0.5);
+                    mesh.position.set(100, 0, 10);
+                    mesh.rotation.set(Math.PI / 2, -Math.PI / 2, 0);
+                    Escena.add(mesh);
+                }
+            });
+        });
+
+        // Codigo Oswald
+        const loaderOswald = new OBJLoader();
+        const textureLoader = new THREE.TextureLoader();
+        let object;
+        loaderOswald.load('./Recursos/Oswald/source/Oswald.obj',
+            (Oswald) => {
+                object = Oswald;
+                const texturaOswald = textureLoader.load('./Recursos/Oswald/textures/texturaOswald.png');
+                object.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.material.map = texturaOswald;
+                    }
+                });
+
+                object.scale.set(50, 50, 50);
+                object.position.set(0, 300, -200);
+                object.rotation.set(Math.PI / 2, 0, 0);
+                Escena.add(object);
+            },
+            (xhr) => {
+                console.log('Oswald ' + (xhr.loaded / xhr.total) * 100 + '% cargado');
+            },
+            (error) => {
+                console.error('Error al cargar el modelo .obj', error);
+            }
+        );
+
+        // Codigo Ijbiñij
+        let Ijbiñij;
+        let mixer;
+        let animations;
+        const IjbiñijLoader = new GLTFLoader();
+        IjbiñijLoader.load('./Recursos/Ijbiñij.glb',
+            (loadedObject) => {
+                Ijbiñij = loadedObject.scene;
+                Ijbiñij.scale.set(40, 40, 40);
+                Ijbiñij.position.set(0, 0, -35);
+                Ijbiñij.rotation.set(Math.PI / 2, Math.PI / 1, 0);
+                Escena.add(Ijbiñij);
+
+                animations = loadedObject.animations;
+                mixer = new THREE.AnimationMixer(Ijbiñij);
+
+                const numAnimations = animations.length;
+                console.log(`El modelo tiene ${numAnimations} animaciones.`);
+                animations.forEach((animation, index) => {
+                    console.log(`Animación ${index + 1}: ${animation.name}`);
+                });
+            }, undefined,
+            (error) => { console.error('Error al cargar el modelo .glb', error); }
+        );
+
+        // Codigo Piso
+        var Piso = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1),
+            new THREE.MeshStandardMaterial(
+                { map: new THREE.TextureLoader().load('Recursos/Pasto.jpg') }));
+        Piso.position.x = 0;
+        Piso.position.y = 0;
+        Piso.position.z = -35;
+        Escena.add(Piso);
+
+        //Teclado
+        const teclasFunciones = {
+            'w': {
+                presionada: false,
+                activar: activarAnimacionIjbinij,
+                detener: detenerAnimacionIjbinij
+            },
+            'a': {
+                presionada: false,
+                activar: activarAnimacionIjbinij,
+                detener: detenerAnimacionIjbinij
+            },
+            's': {
+                presionada: false,
+                activar: activarAnimacionIjbinij,
+                detener: detenerAnimacionIjbinij
+            },
+            'd': {
+                presionada: false,
+                activar: activarAnimacionIjbinij,
+                detener: detenerAnimacionIjbinij
+            }
+        };
+
+        document.addEventListener('keydown', function (event) {
+            const tecla = event.key;
+            if (teclasFunciones[tecla] && !teclasFunciones[tecla].presionada) {
+                teclasFunciones[tecla].presionada = true;
+                teclasFunciones[tecla].activar();
+            }
+        });
+
+        document.addEventListener('keyup', function (event) {
+            const tecla = event.key;
+            if (teclasFunciones[tecla]) {
+                teclasFunciones[tecla].presionada = false;
+                teclasFunciones[tecla].detener();
+            }
+        });
+
+        function activarAnimacionIjbinij() {
+            if (mixer && animations && animations.length > 0) {
+                const animacionDeseadaIndex = 0;
+                const action = mixer.clipAction(animations[animacionDeseadaIndex]);
+                action.reset();
+                action.play();
+            }
+        }
+
+        function detenerAnimacionIjbinij() {
+            if (mixer && animations && animations.length > 0) {
+                const animacionDeseadaIndex = 0;
+                const action = mixer.clipAction(animations[animacionDeseadaIndex]);
+                action.stop();
+            }
+        }
+
+        // Delta Tiempo y animaciones
+        let tiempoAnterior = 0;
+        let tiempoTotalTranscurrido = 0;
+        const velocidadMovimiento = 50;
+
+        function Animacion(tiempoActual) {
+            const deltaTime = (tiempoActual - tiempoAnterior) / 1000;
+            tiempoAnterior = tiempoActual;
+
+            if (mixer) {
+                mixer.update(deltaTime);
+            }
+
+            if (teclasFunciones['w'].presionada) {
+                Ijbiñij.rotation.y = -Math.PI / 1;
+                const velocidad = new THREE.Vector3(0, velocidadMovimiento * deltaTime, 0);
+                Ijbiñij.position.add(velocidad);
+            }
+
+            if (teclasFunciones['a'].presionada) {
+                Ijbiñij.rotation.y = -Math.PI / 2;
+                const velocidad = new THREE.Vector3(-velocidadMovimiento * deltaTime, 0, 0);
+                Ijbiñij.position.add(velocidad);
+            }
+
+            if (teclasFunciones['s'].presionada) {
+                Ijbiñij.rotation.y = 0;
+                const velocidad = new THREE.Vector3(0, -velocidadMovimiento * deltaTime, 0);
+                Ijbiñij.position.add(velocidad);
+            }
+
+            if (teclasFunciones['d'].presionada) {
+                Ijbiñij.rotation.y = Math.PI / 2;
+                const velocidad = new THREE.Vector3(velocidadMovimiento * deltaTime, 0, 0);
+                Ijbiñij.position.add(velocidad);
+            }
+
+            if (Ijbiñij && Ijbiñij.position) {
+                const distanciaCamara = 100;
+                const offsetCamara = new THREE.Vector3(0, -150,150);
+                const posicionCamara = Ijbiñij.position.clone().add(offsetCamara);
+                const lookAt = Ijbiñij.position.clone();
+                Camara.position.lerp(posicionCamara, 0.1);
+                Camara.lookAt(lookAt);
+            }
+
+            requestAnimationFrame(Animacion);
+            Render.render(Escena, Camara);
+        }
+
+        function iniciarAnimacion() {
+            requestAnimationFrame(function (timestamp) {
+                tiempoAnterior = timestamp;
+                Animacion(timestamp);
+            });
+        }
+        iniciarAnimacion();
+
+    </script>
+</body>
+</html>
